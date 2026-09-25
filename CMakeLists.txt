@@ -163,6 +163,7 @@ endif()
 add_compile_definitions(PICO_STACK_SIZE=0x1000)
 
 add_executable(${PROJECT_NAME}
+${CMAKE_SOURCE_DIR}/src/bluepad32_platform.c
 src/main.cpp
 src/gp2040.cpp
 src/gp2040aux.cpp
@@ -285,6 +286,8 @@ pico_set_program_version(GP2040-CE ${GIT_REPO_VERSION})
 
 target_link_libraries(${PROJECT_NAME}
 pico_stdlib
+pico_unique_id
+pico_rand
 pico_bootsel_via_double_reset
 tinyusb_host
 tinyusb_pico_pio_usb
@@ -303,7 +306,29 @@ WiiExtension
 SNESpad
 pico_mbedtls
 nanopb
+pico_cyw43_arch_none
+pico_btstack_classic
+pico_btstack_cyw43
+bluepad32
 )
+
+# --- Bluepad32 (Bluetooth gamepad host) ---
+# BTstack's flash bank defaults to the last 2 sectors of flash, which is inside
+# GP2040-CE's config region (EEPROM_ADDRESS_START 0x101F8000, 32KB). Move it just
+# below that or the two erase each other and the PS4 keys are lost.
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+  PICO_FLASH_BANK_STORAGE_OFFSET=0x1F6000
+)
+set(BLUEPAD32_ROOT $ENV{HOME}/Source/bluepad32)
+# must precede add_subdirectory: libbluepad32 includes btstack_config.h / sdkconfig.h
+include_directories(${CMAKE_SOURCE_DIR}/bluepad32_config)
+include_directories(${PICO_SDK_PATH}/lib/btstack/src)
+add_subdirectory(${BLUEPAD32_ROOT}/src/components/bluepad32 libbluepad32)
+target_include_directories(${PROJECT_NAME} PRIVATE
+  ${CMAKE_SOURCE_DIR}/bluepad32_config
+  ${BLUEPAD32_ROOT}/src/components/bluepad32/include
+)
+# --- end Bluepad32 ---
 
 target_include_directories(${PROJECT_NAME} PUBLIC
 headers

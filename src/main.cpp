@@ -9,6 +9,7 @@
 // GP2040 includes
 #include "gp2040.h"
 #include "gp2040aux.h"
+#include "bluepad32_platform.h"
 
 #include <cstdlib>
 
@@ -23,30 +24,26 @@ void __verbose_terminate_handler()
 static GP2040 * gp2040Core0 = nullptr;
 static GP2040Aux * gp2040Core1 = nullptr;
 
-// Launch our second core with additional modules loaded in
+// Core 1 belongs to the Bluetooth stack. BTstack's run loop blocks forever, which
+// is what it is designed to do when it owns a core (same design as PicoSwitch).
+// This replaces GP2040Aux: display and LED addons are given up for Bluetooth.
 void core1() {
 	multicore_lockout_victim_init(); // block core 1
-
-	// Create GP2040 w/ Additional Modules for Core 1	
-	gp2040Core1->setup();
-	gp2040Core1->run();
+	gp2040_bluepad32_core1();        // does not return
 }
 
 int main() {
-	// Create GP2040 Main Core (core0), Core1 is dependent on Core0
+	// Create GP2040 Main Core (core0)
 	gp2040Core0 = new GP2040();
-	gp2040Core1 = new GP2040Aux();
 
 	// Create GP2040 Main Core - Setup Core0
 	gp2040Core0->setup();
 
-	// Create GP2040 Thread for Core1
+	// Hand core 1 to Bluetooth
 	multicore_launch_core1(core1);
 
-	// Sync Core0 and Core1
-	while(gp2040Core1->ready() == false ) {
-		__asm volatile ("nop\n");
-	}
+	// Core 0 does not wait for Bluetooth: USB must enumerate and pass PS4 auth
+	// whether or not a controller has paired yet.
 	gp2040Core0->run();
 
 	return 0;

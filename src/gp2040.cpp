@@ -1,5 +1,6 @@
 // GP2040 includes
 #include "gp2040.h"
+#include "bluepad32_platform.h"
 #include "helper.h"
 #include "system.h"
 #include "enums.pb.h"
@@ -201,6 +202,7 @@ void GP2040::setup() {
 	// register system event handlers
 	EventManager::getInstance().registerEventHandler(GP_EVENT_STORAGE_SAVE, GPEVENT_CALLBACK(this->handleStorageSave(event)));
 	EventManager::getInstance().registerEventHandler(GP_EVENT_RESTART, GPEVENT_CALLBACK(this->handleSystemReboot(event)));
+
 }
 
 /**
@@ -288,6 +290,7 @@ void GP2040::run() {
 	// Initialize our USB manager
 	USBHostManager::getInstance().start();
 
+
 	if (configMode == true ) {
 		rndis_init();
 	}
@@ -301,6 +304,53 @@ void GP2040::run() {
 		debounceGpioGetAll();
 		// Read Gamepad
 		gamepad->read();
+
+		// Overlay the Bluetooth controller on top of the GPIO state.
+		// bp32_state is written by the Bluepad32 callback on core 1.
+		if (bp32_state.connected) {
+			const uint16_t bb = bp32_state.buttons;
+			const uint16_t bm = bp32_state.misc;
+			uint16_t btn = 0;
+			if (bb & (1U << 0))  btn |= GAMEPAD_MASK_B1;  // A      -> Cross
+			if (bb & (1U << 1))  btn |= GAMEPAD_MASK_B2;  // B      -> Circle
+			if (bb & (1U << 2))  btn |= GAMEPAD_MASK_B3;  // X      -> Square
+			if (bb & (1U << 3))  btn |= GAMEPAD_MASK_B4;  // Y      -> Triangle
+			if (bb & (1U << 4))  btn |= GAMEPAD_MASK_L1;
+			if (bb & (1U << 5))  btn |= GAMEPAD_MASK_R1;
+			if (bb & (1U << 6))  btn |= GAMEPAD_MASK_L2;
+			if (bb & (1U << 7))  btn |= GAMEPAD_MASK_R2;
+			if (bb & (1U << 8))  btn |= GAMEPAD_MASK_L3;
+			if (bb & (1U << 9))  btn |= GAMEPAD_MASK_R3;
+			if (bm & (1U << 0))  btn |= GAMEPAD_MASK_A1;  // SYSTEM  -> PS
+			if (bm & (1U << 1))  btn |= GAMEPAD_MASK_S1;  // SELECT  -> Share
+			if (bm & (1U << 2))  btn |= GAMEPAD_MASK_S2;  // START   -> Options
+			if (bm & (1U << 3))  btn |= GAMEPAD_MASK_A2;  // CAPTURE -> spare
+			gamepad->state.buttons |= btn;
+
+			const uint8_t bd = bp32_state.dpad;
+			uint8_t dp = 0;
+			if (bd & (1U << 0)) dp |= GAMEPAD_MASK_UP;
+			if (bd & (1U << 1)) dp |= GAMEPAD_MASK_DOWN;
+			if (bd & (1U << 2)) dp |= GAMEPAD_MASK_RIGHT;
+			if (bd & (1U << 3)) dp |= GAMEPAD_MASK_LEFT;
+			gamepad->state.dpad |= dp;
+
+			// Bluepad32 axes are -512..511; GP2040 wants 0..65535
+			auto axis = [](int32_t v) -> uint16_t {
+				int32_t n = ((v + 512) * 65535) / 1023;
+				if (n < 0) n = 0;
+				if (n > 65535) n = 65535;
+				return (uint16_t)n;
+			};
+			gamepad->state.lx = axis(bp32_state.axis_x);
+			gamepad->state.ly = axis(bp32_state.axis_y);
+			gamepad->state.rx = axis(bp32_state.axis_rx);
+			gamepad->state.ry = axis(bp32_state.axis_ry);
+
+			// triggers are 0..1023 -> 0..255
+			gamepad->state.lt = (uint8_t)((bp32_state.brake * 255) / 1023);
+			gamepad->state.rt = (uint8_t)((bp32_state.throttle * 255) / 1023);
+		}
 
 		checkRawState(prevState, gamepad->state);
 
