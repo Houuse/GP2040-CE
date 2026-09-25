@@ -319,7 +319,10 @@ bluepad32
 target_compile_definitions(${PROJECT_NAME} PRIVATE
   PICO_FLASH_BANK_STORAGE_OFFSET=0x1F6000
 )
-set(BLUEPAD32_ROOT $ENV{HOME}/Source/bluepad32)
+# sibling submodule of the ps4-espro-adapter superproject; override to build standalone
+if(NOT DEFINED BLUEPAD32_ROOT)
+  set(BLUEPAD32_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../bluepad32)
+endif()
 # must precede add_subdirectory: libbluepad32 includes btstack_config.h / sdkconfig.h
 include_directories(${CMAKE_SOURCE_DIR}/bluepad32_config)
 include_directories(${PICO_SDK_PATH}/lib/btstack/src)
