@@ -46,6 +46,7 @@ static void plat_on_device_disconnected(uni_hid_device_t* d) {
     printf("[bp32] disconnected\n");
     bp32_state.connected = false;
     cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);  // no UART here: LED is the signal
+    uni_bt_start_scanning_and_autoconnect_unsafe();  // else nothing looks for the pad again
 }
 
 static uni_error_t plat_on_device_ready(uni_hid_device_t* d) {
